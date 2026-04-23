@@ -1,13 +1,16 @@
 ARG BUILD_FROM
 FROM $BUILD_FROM
 
-ENV LANG C.UTF-8
+ENV LANG=C.UTF-8 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Install Python and deps
-RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --no-cache-dir --break-system-packages flask==3.0.3 flask-cors==4.0.1
+# Install Python 3 + Flask + Flask-CORS using Alpine packages (reliable across base image versions).
+# Fall back to pip if apk packages aren't available.
+RUN apk add --no-cache python3 py3-pip py3-flask py3-flask-cors \
+    || (apk add --no-cache python3 py3-pip && \
+        pip3 install --no-cache-dir --break-system-packages flask flask-cors)
 
-# Copy application files
 WORKDIR /app
 COPY server.py /app/server.py
 COPY static /app/static
