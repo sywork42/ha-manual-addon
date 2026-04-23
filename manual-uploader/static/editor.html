@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual Editor</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f7; --card: #fff; --text: #1a1a1a; --muted: #6b6b70;
+    --accent: #0a84ff; --border: #e5e5ea; --danger: #ff3b30; --success: #34c759;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #000; --card: #1c1c1e; --text: #fff; --muted: #98989d; --border: #38383a; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 720px; margin: 0 auto; padding: 20px 16px 100px; }
+  .top-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+  .title-block h1 {
+    font-size: 26px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.5px;
+    border: none; background: transparent; color: var(--text); width: 100%;
+    padding: 2px 4px; margin-left: -4px; border-radius: 6px;
+  }
+  .title-block h1:focus, .title-block .subtitle-input:focus {
+    outline: 2px solid var(--accent); background: rgba(10,132,255,0.05);
+  }
+  .title-block .subtitle-input {
+    color: var(--muted); font-size: 15px; margin: 0; border: none;
+    background: transparent; width: 100%; padding: 2px 4px; margin-left: -4px; border-radius: 6px;
+  }
+  .qr-block { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
+  .qr-block #qrcode { background: #fff; padding: 6px; border-radius: 8px; border: 1px solid var(--border); }
+  .qr-block #qrcode img, .qr-block #qrcode canvas { display: block; }
+  .qr-print-btn {
+    font-size: 12px; padding: 4px 10px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .card { background: var(--card); border-radius: 14px; padding: 18px; margin-bottom: 16px; border: 1px solid var(--border); }
+  .card h2 {
+    font-size: 18px; font-weight: 600; margin: 0 0 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .add-btn {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    background: var(--accent); color: #fff; border: none; cursor: pointer;
+  }
+  .item {
+    position: relative; padding: 12px; margin-bottom: 10px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--bg);
+  }
+  .item-label { font-weight: 500; margin-bottom: 4px; }
+  .item-sub { font-size: 13px; color: var(--muted); word-break: break-all; }
+  .remove-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--danger); color: #fff; border: none;
+    border-radius: 50%; width: 26px; height: 26px; font-size: 14px; cursor: pointer;
+  }
+  .empty-msg { color: var(--muted); font-size: 14px; margin: 0; }
+  video, iframe { width: 100%; border-radius: 8px; margin-top: 6px; background: #000; }
+
+  .fab-bar {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 8px; background: var(--card); padding: 8px;
+    border-radius: 14px; border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 100; flex-wrap: wrap; justify-content: center;
+  }
+  .fab {
+    padding: 10px 14px; border-radius: 10px; border: none;
+    font-size: 14px; font-weight: 600; cursor: pointer; background: transparent; color: var(--text);
+  }
+  .fab.primary { background: var(--accent); color: #fff; }
+  .fab.success { background: var(--success); color: #fff; }
+  .fab.link { background: transparent; color: var(--accent); }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 200; justify-content: center; align-items: center; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 14px; padding: 20px;
+    max-width: 460px; width: 100%; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { margin: 0 0 16px; font-size: 18px; }
+  .modal label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  .modal input, .modal textarea {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 15px; font-family: inherit;
+  }
+  .modal textarea { min-height: 80px; resize: vertical; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+  .modal-actions button {
+    padding: 10px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); cursor: pointer; font-weight: 500;
+  }
+  .modal-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; background: var(--bg); padding: 4px; border-radius: 10px; }
+  .tab { flex: 1; padding: 8px; text-align: center; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--muted); }
+  .tab.active { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .dropzone {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 24px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: all 0.2s;
+  }
+  .dropzone:hover, .dropzone.drag-over { border-color: var(--accent); background: rgba(10,132,255,0.05); color: var(--accent); }
+  .dropzone input[type="file"] { display: none; }
+  .dropzone-icon { font-size: 32px; margin-bottom: 6px; }
+
+  .progress-wrap { margin-top: 10px; display: none; }
+  .progress-wrap.active { display: block; }
+  .progress-bar { width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s; }
+  .progress-text { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .upload-result { margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 14px; display: none; }
+  .upload-result.success { display: block; background: rgba(52,199,89,0.1); color: var(--success); border: 1px solid rgba(52,199,89,0.3); }
+  .upload-result.error { display: block; background: rgba(255,59,48,0.1); color: var(--danger); border: 1px solid rgba(255,59,48,0.3); }
+
+  .save-status {
+    position: fixed; top: 12px; right: 12px; padding: 6px 12px;
+    border-radius: 20px; font-size: 12px; background: var(--card);
+    border: 1px solid var(--border); color: var(--muted); z-index: 50;
+  }
+  .save-status.saving { background: rgba(10,132,255,0.1); color: var(--accent); border-color: rgba(10,132,255,0.3); }
+  .save-status.saved { background: rgba(52,199,89,0.1); color: var(--success); border-color: rgba(52,199,89,0.3); }
+  .save-status.error { background: rgba(255,59,48,0.1); color: var(--danger); border-color: rgba(255,59,48,0.3); }
+
+  @media print {
+    body * { visibility: hidden; }
+    .print-area, .print-area * { visibility: visible; }
+    .print-area { position: absolute; left: 0; top: 0; width: 100%; text-align: center; padding: 40px; }
+    .print-area h2 { font-size: 24px; margin-bottom: 8px; }
+    .print-area img, .print-area canvas { width: 300px !important; height: 300px !important; }
+  }
+  .print-area { display: none; }
+</style>
+</head>
+<body>
+
+<div class="save-status" id="save-status">Unsaved</div>
+
+<div class="container">
+  <div class="top-bar">
+    <div class="title-block" style="flex:1">
+      <input type="text" class="title-input" id="title-input" placeholder="🧼 Appliance Name" style="font-size:26px;font-weight:700;border:none;background:transparent;color:var(--text);width:100%;padding:2px 4px;margin-left:-4px;border-radius:6px">
+      <input type="text" class="subtitle-input" id="subtitle-input" placeholder="Model · Location">
+    </div>
+    <div class="qr-block">
+      <div id="qrcode"></div>
+      <button class="qr-print-btn" onclick="printQR()">🖨 Print QR</button>
+      <div class="hint" id="qr-hint" style="max-width:110px;text-align:center">Save first to enable</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>
+      <span>Videos</span>
+      <button class="add-btn" onclick="openModal('video')">+ Add</button>
+    </h2>
+    <div id="videos-list"></div>
+  </div>
+
+  <div class="card">
+    <h2>
+      <span>Troubleshooting</span>
+      <button class="add-btn" onclick="openModal('trouble')">+ Add</button>
+    </h2>
+    <div id="trouble-list"></div>
+  </div>
+
+  <div class="card">
+    <h2>
+      <span>PDF Manuals</span>
+      <button class="add-btn" onclick="openModal('pdf')">+ Add</button>
+    </h2>
+    <div id="pdf-list"></div>
+  </div>
+</div>
+
+<div class="fab-bar">
+  <a class="fab link" href=".">← Back to manuals</a>
+  <button class="fab success" onclick="saveManual()">💾 Save</button>
+  <button class="fab" onclick="openPublishedPage()" id="open-btn" disabled>👁 Preview</button>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<div class="print-area" id="print-area">
+  <h2 id="print-title"></h2>
+  <p id="print-subtitle"></p>
+  <div id="print-qr"></div>
+  <p style="margin-top:20px;font-size:14px;color:#666">Scan to view manual &amp; videos</p>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG & STATE
+   ============================================================ */
+const BASE = window.location.pathname.replace(/\/editor\/?$/, '').replace(/\/$/, '');
+const urlParams = new URLSearchParams(window.location.search);
+let manualId = urlParams.get('id') || ('m_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
+let savedUrl = null;
+
+const DATA = {
+  title: "",
+  subtitle: "",
+  videos: [],
+  trouble: [],
+  pdfs: [],
+};
+
+/* ============================================================
+   API
+   ============================================================ */
+async function api(path, opts = {}) {
+  const res = await fetch(BASE + '/api' + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({error: `HTTP ${res.status}`}));
+    throw new Error(err.error || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+async function uploadFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', BASE + '/api/upload');
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status === 200) resolve(data);
+        else reject(new Error(data.error || `HTTP ${xhr.status}`));
+      } catch (e) { reject(new Error('Invalid server response')); }
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.send(form);
+  });
+}
+
+/* ============================================================
+   LOAD EXISTING MANUAL
+   ============================================================ */
+async function loadManual() {
+  if (!urlParams.get('id')) return;
+  try {
+    const data = await api('/manuals/' + encodeURIComponent(manualId));
+    Object.assign(DATA, data);
+    savedUrl = data._local_url || null;
+    document.getElementById('title-input').value = DATA.title || '';
+    document.getElementById('subtitle-input').value = DATA.subtitle || '';
+    if (savedUrl) {
+      document.getElementById('open-btn').disabled = false;
+      document.getElementById('qr-hint').style.display = 'none';
+    }
+    render();
+  } catch (e) {
+    console.error('Failed to load manual', e);
+  }
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render() {
+  const vList = document.getElementById('videos-list');
+  vList.innerHTML = DATA.videos.length === 0
+    ? '<p class="empty-msg">No videos yet. Tap + Add.</p>'
+    : DATA.videos.map((v, i) => `
+        <div class="item">
+          <button class="remove-btn" onclick="removeItem('videos', ${i})">×</button>
+          <div class="item-label">${escapeHtml(v.label)}</div>
+          <div class="item-sub">${escapeHtml(v.src)}</div>
+        </div>`).join('');
+
+  const tList = document.getElementById('trouble-list');
+  tList.innerHTML = DATA.trouble.length === 0
+    ? '<p class="empty-msg">No troubleshooting items yet.</p>'
+    : DATA.trouble.map((t, i) => `
+        <div class="item">
+          <button class="remove-btn" onclick="removeItem('trouble', ${i})">×</button>
+          <div class="item-label">${escapeHtml(t.question)}</div>
+          <div class="item-sub">${escapeHtml(t.answer)}</div>
+        </div>`).join('');
+
+  const pList = document.getElementById('pdf-list');
+  pList.innerHTML = DATA.pdfs.length === 0
+    ? '<p class="empty-msg">No PDFs yet.</p>'
+    : DATA.pdfs.map((p, i) => `
+        <div class="item">
+          <button class="remove-btn" onclick="removeItem('pdfs', ${i})">×</button>
+          <div class="item-label">${escapeHtml(p.label)}</div>
+          <div class="item-sub">${escapeHtml(p.src)}</div>
+        </div>`).join('');
+
+  renderQR();
+  setStatus('unsaved');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function removeItem(type, i) {
+  if (!confirm('Remove this item?')) return;
+  DATA[type].splice(i, 1);
+  render();
+}
+
+/* ============================================================
+   QR — points to the SAVED manual URL (/local/...)
+   ============================================================ */
+function renderQR() {
+  const el = document.getElementById('qrcode');
+  el.innerHTML = '';
+  if (!savedUrl) {
+    el.innerHTML = '<div style="width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px;text-align:center">Save first</div>';
+    return;
+  }
+  // Build absolute URL to the HA-served manual
+  const haBase = window.location.origin;
+  const fullUrl = haBase + savedUrl;
+  new QRCode(el, { text: fullUrl, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
+}
+
+function printQR() {
+  if (!savedUrl) { alert('Save the manual first so it has a stable URL.'); return; }
+  document.getElementById('print-title').textContent = DATA.title;
+  document.getElementById('print-subtitle').textContent = DATA.subtitle;
+  const pq = document.getElementById('print-qr');
+  pq.innerHTML = '';
+  const fullUrl = window.location.origin + savedUrl;
+  new QRCode(pq, { text: fullUrl, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M });
+  setTimeout(() => window.print(), 200);
+}
+
+/* ============================================================
+   SAVE
+   ============================================================ */
+async function saveManual() {
+  DATA.title = document.getElementById('title-input').value.trim() || 'Untitled Appliance';
+  DATA.subtitle = document.getElementById('subtitle-input').value.trim();
+  setStatus('saving');
+  try {
+    const res = await api('/manuals/' + encodeURIComponent(manualId), {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(DATA),
+    });
+    savedUrl = res.local_url;
+    document.getElementById('open-btn').disabled = false;
+    document.getElementById('qr-hint').style.display = 'none';
+    renderQR();
+    setStatus('saved');
+    // Update URL without navigating, so refresh keeps editing same manual
+    window.history.replaceState(null, '', '?id=' + encodeURIComponent(manualId));
+  } catch (e) {
+    setStatus('error', e.message);
+  }
+}
+
+function openPublishedPage() {
+  if (savedUrl) window.open(savedUrl, '_blank');
+}
+
+function setStatus(state, msg) {
+  const el = document.getElementById('save-status');
+  el.className = 'save-status ' + state;
+  if (state === 'saving') el.textContent = '💾 Saving…';
+  else if (state === 'saved') el.textContent = '✓ Saved';
+  else if (state === 'error') el.textContent = '⚠ ' + (msg || 'Error');
+  else el.textContent = '● Unsaved';
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+function openModal(type) {
+  const body = document.getElementById('modal-body');
+  if (type === 'video') {
+    body.innerHTML = `
+      <h3>Add video</h3>
+      <label>Label</label>
+      <input id="m-label" placeholder="e.g. How to start a cycle">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(this,'upload')">📤 Upload</div>
+        <div class="tab" onclick="switchTab(this,'url')">🔗 URL</div>
+      </div>
+      <div class="tab-content active" data-tab="upload">
+        <div class="dropzone" onclick="this.querySelector('input').click()">
+          <div class="dropzone-icon">📹</div>
+          <div><strong>Tap to select video</strong></div>
+          <div class="hint">From camera roll or files</div>
+          <input type="file" accept="video/*" onchange="handleUpload(this.files[0])">
+        </div>
+        <div class="progress-wrap"><div class="progress-bar"><div class="progress-bar-fill"></div></div><div class="progress-text"></div></div>
+        <div class="upload-result"></div>
+      </div>
+      <div class="tab-content" data-tab="url">
+        <label>Video URL or path</label>
+        <input id="m-src-url" placeholder="YouTube URL or /local/manuals/video.mp4">
+      </div>
+      <input type="hidden" id="m-src">
+      <div class="modal-actions">
+        <button onclick="closeModal()">Cancel</button>
+        <button class="primary" onclick="commitAdd('videos','video')">Add</button>
+      </div>`;
+  } else if (type === 'trouble') {
+    body.innerHTML = `
+      <h3>Add troubleshooting item</h3>
+      <label>Question / Problem</label>
+      <input id="m-question" placeholder="e.g. Flashing salt light">
+      <label>Answer / Solution</label>
+      <textarea id="m-answer" placeholder="Instructions to fix..."></textarea>
+      <div class="modal-actions">
+        <button onclick="closeModal()">Cancel</button>
+        <button class="primary" onclick="commitAdd('trouble','trouble')">Add</button>
+      </div>`;
+  } else if (type === 'pdf') {
+    body.innerHTML = `
+      <h3>Add PDF manual</h3>
+      <label>Label</label>
+      <input id="m-label" placeholder="e.g. Full user manual">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(this,'upload')">📤 Upload</div>
+        <div class="tab" onclick="switchTab(this,'url')">🔗 URL</div>
+      </div>
+      <div class="tab-content active" data-tab="upload">
+        <div class="dropzone" onclick="this.querySelector('input').click()">
+          <div class="dropzone-icon">📄</div>
+          <div><strong>Tap to select PDF</strong></div>
+          <input type="file" accept="application/pdf" onchange="handleUpload(this.files[0])">
+        </div>
+        <div class="progress-wrap"><div class="progress-bar"><div class="progress-bar-fill"></div></div><div class="progress-text"></div></div>
+        <div class="upload-result"></div>
+      </div>
+      <div class="tab-content" data-tab="url">
+        <label>PDF path or URL</label>
+        <input id="m-src-url" placeholder="/local/manuals/manual.pdf">
+      </div>
+      <input type="hidden" id="m-src">
+      <div class="modal-actions">
+        <button onclick="closeModal()">Cancel</button>
+        <button class="primary" onclick="commitAdd('pdfs','pdf')">Add</button>
+      </div>`;
+  }
+  document.getElementById('modal').classList.add('open');
+}
+
+function switchTab(tabEl, name) {
+  tabEl.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  tabEl.classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.dataset.tab === name);
+  });
+}
+
+async function handleUpload(file) {
+  if (!file) return;
+  const modal = document.getElementById('modal-body');
+  const progressWrap = modal.querySelector('.progress-wrap');
+  const progressFill = modal.querySelector('.progress-bar-fill');
+  const progressText = modal.querySelector('.progress-text');
+  const result = modal.querySelector('.upload-result');
+  progressWrap.classList.add('active');
+  result.className = 'upload-result';
+
+  try {
+    const data = await uploadFile(file, pct => {
+      progressFill.style.width = (pct * 100) + '%';
+      progressText.textContent = `Uploading… ${Math.round(pct * 100)}%`;
+    });
+    progressText.textContent = `✓ Uploaded ${data.filename}`;
+    document.getElementById('m-src').value = data.local_url;
+    const labelEl = document.getElementById('m-label');
+    if (labelEl && !labelEl.value) {
+      labelEl.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+    }
+    result.className = 'upload-result success';
+    result.textContent = 'Ready — click "Add" below to confirm.';
+  } catch (e) {
+    result.className = 'upload-result error';
+    result.textContent = 'Upload failed: ' + e.message;
+    progressWrap.classList.remove('active');
+  }
+}
+
+function commitAdd(type, kind) {
+  if (kind === 'trouble') {
+    const q = document.getElementById('m-question').value.trim();
+    const a = document.getElementById('m-answer').value.trim();
+    if (!q || !a) { alert('Please fill both fields.'); return; }
+    DATA.trouble.push({question: q, answer: a});
+  } else {
+    const label = document.getElementById('m-label').value.trim();
+    const src = document.getElementById('m-src').value.trim() || document.getElementById('m-src-url').value.trim();
+    if (!label || !src) { alert('Please provide both label and file/URL.'); return; }
+    DATA[type].push({label, src});
+  }
+  closeModal();
+  render();
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+/* ============================================================
+   INIT
+   ============================================================ */
+document.getElementById('title-input').addEventListener('input', () => setStatus('unsaved'));
+document.getElementById('subtitle-input').addEventListener('input', () => setStatus('unsaved'));
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') closeModal();
+});
+
+loadManual().then(() => render());
+</script>
+</body>
+</html>

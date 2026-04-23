@@ -1,0 +1,27 @@
+name: Manual Uploader
+version: "1.0.0"
+slug: manual_uploader
+description: Create appliance manuals with QR codes, videos, PDFs, and troubleshooting — with in-page uploads from your phone.
+url: https://github.com/YOUR_GITHUB_USERNAME/ha-manual-addon
+arch:
+  - aarch64
+  - amd64
+  - armv7
+startup: application
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:book-open-variant
+panel_title: Manuals
+map:
+  - type: homeassistant_config
+    read_only: false
+  - type: media
+    read_only: false
+options:
+  max_upload_mb: 500
+  subfolder: manuals
+schema:
+  max_upload_mb: int(10,5000)
+  subfolder: str
