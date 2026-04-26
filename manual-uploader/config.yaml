@@ -1,5 +1,5 @@
 name: Manual Uploader
-version: "1.1.0"
+version: "1.1.1"
 slug: manual_uploader
 description: Create appliance manuals with QR codes, videos, PDFs, and troubleshooting — with in-page uploads from your phone.
 url: https://github.com/YOUR_GITHUB_USERNAME/ha-manual-addon
