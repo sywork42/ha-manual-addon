@@ -331,8 +331,12 @@ function renderQR() {
 }
 
 /**
- * Render a high-res QR with the appliance name underneath into a canvas,
- * then trigger download as PNG. The filename is the appliance slug.
+ * Render a print-sized QR (30mm × 30mm at 300 DPI) with the appliance
+ * name and subtitle underneath, then download as PNG. The filename is
+ * the appliance slug.
+ *
+ * Sizing math: 30mm × 300 DPI / 25.4 mm/inch ≈ 354 px
+ * The whole label (QR + text) is sized so it prints at ~30mm wide.
  */
 function downloadQR() {
   if (!savedUrl) { alert('Save the manual first.'); return; }
@@ -342,81 +346,147 @@ function downloadQR() {
   const subtitle = DATA.subtitle || '';
   const slug = savedSlug || slugify(title);
 
-  // 1. Render QR at 600px into a hidden div using qrcodejs (it produces a canvas or img)
+  // Print sizing
+  const DPI = 300;
+  const TARGET_MM = 30;             // physical size of the QR module itself
+  const MM_TO_PX = DPI / 25.4;
+  const QR_PX = Math.round(TARGET_MM * MM_TO_PX);   // ≈ 354 px
+  const PADDING_PX = Math.round(1 * MM_TO_PX);      // 1mm padding on sides
+  const TEXT_AREA_PX = Math.round(8 * MM_TO_PX);    // 8mm space for text below
+
+  const W = QR_PX + PADDING_PX * 2;
+  const H = W + TEXT_AREA_PX;
+
+  // 1. Render QR at high resolution into a hidden div
   const renderArea = document.getElementById('qr-render-area');
   renderArea.innerHTML = '';
   new QRCode(renderArea, {
     text: fullUrl,
-    width: 600,
-    height: 600,
+    width: QR_PX,
+    height: QR_PX,
     correctLevel: QRCode.CorrectLevel.M,
   });
 
-  // qrcodejs renders to canvas if supported, falls back to img. Wait a tick.
   setTimeout(() => {
     const qrCanvas = renderArea.querySelector('canvas');
     const qrImg = renderArea.querySelector('img');
 
     const finalCanvas = document.createElement('canvas');
-    const W = 700;
-    const padding = 50;
-    const titleSpace = 130;  // for title + subtitle below QR
     finalCanvas.width = W;
-    finalCanvas.height = W + titleSpace;
-
+    finalCanvas.height = H;
     const ctx = finalCanvas.getContext('2d');
 
     // White background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+    ctx.fillRect(0, 0, W, H);
 
-    // Helper to draw QR + text once the QR pixels are ready
     function drawComposite(qrSource) {
-      // Draw QR (centered horizontally, padded from top)
-      const qrSize = W - padding * 2;
-      ctx.drawImage(qrSource, padding, padding, qrSize, qrSize);
+      // QR
+      ctx.drawImage(qrSource, PADDING_PX, PADDING_PX, QR_PX, QR_PX);
 
-      // Draw title
+      // Text scales relative to size — small print needs proportionally small fonts
+      const titlePx = Math.round(2.5 * MM_TO_PX);    // ~2.5mm tall title
+      const subtitlePx = Math.round(1.8 * MM_TO_PX); // ~1.8mm subtitle
+
+      const textBaseY = W + Math.round(3 * MM_TO_PX);
+
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'center';
-      ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText(truncate(title, 30), W / 2, W + 40);
+      ctx.font = `bold ${titlePx}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillText(truncate(title, 24), W / 2, textBaseY);
 
-      // Draw subtitle
       if (subtitle) {
         ctx.fillStyle = '#555555';
-        ctx.font = '20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-        ctx.fillText(truncate(subtitle, 50), W / 2, W + 75);
+        ctx.font = `${subtitlePx}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.fillText(truncate(subtitle, 32), W / 2, textBaseY + Math.round(3 * MM_TO_PX));
       }
 
-      // Hint text
-      ctx.fillStyle = '#888888';
-      ctx.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillText('Scan to view manual', W / 2, W + 110);
-
-      // Trigger download
+      // Convert canvas → PNG → inject DPI metadata → download
       finalCanvas.toBlob(blob => {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = slug + '.png';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
-        renderArea.innerHTML = '';
+        blob.arrayBuffer().then(buf => {
+          const withDpi = injectPngDpi(new Uint8Array(buf), DPI);
+          const finalBlob = new Blob([withDpi], {type: 'image/png'});
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(finalBlob);
+          a.download = slug + '.png';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+          renderArea.innerHTML = '';
+        });
       }, 'image/png');
     }
 
     if (qrCanvas) {
       drawComposite(qrCanvas);
     } else if (qrImg) {
-      // qrcodejs sometimes renders img — wait for it to load
       if (qrImg.complete) drawComposite(qrImg);
       else qrImg.onload = () => drawComposite(qrImg);
     } else {
       alert('Could not generate QR code.');
     }
   }, 100);
+}
+
+/**
+ * Inject a pHYs chunk into a PNG so printers/browsers know it's high DPI.
+ * Without this, the PNG renders at the default 96 DPI = much larger than 30mm.
+ */
+function injectPngDpi(pngBytes, dpi) {
+  // Pixels per metre = DPI / 0.0254
+  const pixelsPerMetre = Math.round(dpi / 0.0254);
+
+  // Build the pHYs chunk (9 bytes of data: x ppm, y ppm, unit=1=metre)
+  const data = new Uint8Array(9);
+  const dv = new DataView(data.buffer);
+  dv.setUint32(0, pixelsPerMetre);  // x pixels per metre
+  dv.setUint32(4, pixelsPerMetre);  // y pixels per metre
+  data[8] = 1;                       // unit = metres
+
+  // CRC over chunk type + data
+  const typeBytes = new TextEncoder().encode('pHYs');
+  const crcInput = new Uint8Array(4 + 9);
+  crcInput.set(typeBytes, 0);
+  crcInput.set(data, 4);
+  const crc = crc32(crcInput);
+
+  // Length (4) + Type (4) + Data (9) + CRC (4) = 21 bytes
+  const chunk = new Uint8Array(21);
+  const chunkDv = new DataView(chunk.buffer);
+  chunkDv.setUint32(0, 9);          // data length
+  chunk.set(typeBytes, 4);
+  chunk.set(data, 8);
+  chunkDv.setUint32(17, crc);
+
+  // Find IHDR end (always at byte 33: 8 sig + 4 len + 4 type + 13 data + 4 crc = 33)
+  // Insert pHYs immediately after IHDR.
+  const insertPos = 33;
+  const out = new Uint8Array(pngBytes.length + chunk.length);
+  out.set(pngBytes.subarray(0, insertPos), 0);
+  out.set(chunk, insertPos);
+  out.set(pngBytes.subarray(insertPos), insertPos + chunk.length);
+  return out;
+}
+
+// Standard CRC-32 (polynomial 0xEDB88320) for PNG chunks
+let _crcTable = null;
+function crc32(bytes) {
+  if (!_crcTable) {
+    _crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) {
+        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      _crcTable[n] = c;
+    }
+  }
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) {
+    c = _crcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  }
+  return (c ^ 0xFFFFFFFF) >>> 0;
 }
 
 function truncate(s, max) {
