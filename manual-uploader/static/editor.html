@@ -20,25 +20,27 @@
   }
   .container { max-width: 720px; margin: 0 auto; padding: 20px 16px 100px; }
   .top-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
-  .title-block h1 {
-    font-size: 26px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.5px;
-    border: none; background: transparent; color: var(--text); width: 100%;
-    padding: 2px 4px; margin-left: -4px; border-radius: 6px;
+  .title-block { flex: 1; }
+  .title-block input.title-input {
+    font-size: 26px; font-weight: 700; border: none; background: transparent;
+    color: var(--text); width: 100%; padding: 2px 4px; margin-left: -4px;
+    border-radius: 6px; font-family: inherit;
   }
-  .title-block h1:focus, .title-block .subtitle-input:focus {
-    outline: 2px solid var(--accent); background: rgba(10,132,255,0.05);
+  .title-block input.subtitle-input {
+    color: var(--muted); font-size: 15px; border: none; background: transparent;
+    width: 100%; padding: 2px 4px; margin-left: -4px; border-radius: 6px; font-family: inherit;
   }
-  .title-block .subtitle-input {
-    color: var(--muted); font-size: 15px; margin: 0; border: none;
-    background: transparent; width: 100%; padding: 2px 4px; margin-left: -4px; border-radius: 6px;
-  }
+  .title-block input:focus { outline: 2px solid var(--accent); background: rgba(10,132,255,0.05); }
   .qr-block { display: flex; flex-direction: column; align-items: center; gap: 6px; flex-shrink: 0; }
   .qr-block #qrcode { background: #fff; padding: 6px; border-radius: 8px; border: 1px solid var(--border); }
   .qr-block #qrcode img, .qr-block #qrcode canvas { display: block; }
-  .qr-print-btn {
-    font-size: 12px; padding: 4px 10px; border: 1px solid var(--border);
+  .qr-actions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+  .qr-action-btn {
+    font-size: 11px; padding: 4px 8px; border: 1px solid var(--border);
     border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer;
   }
+  .qr-action-btn:hover { background: var(--bg); }
+  .qr-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .card { background: var(--card); border-radius: 14px; padding: 18px; margin-bottom: 16px; border: 1px solid var(--border); }
   .card h2 {
     font-size: 18px; font-weight: 600; margin: 0 0 12px;
@@ -60,7 +62,6 @@
     border-radius: 50%; width: 26px; height: 26px; font-size: 14px; cursor: pointer;
   }
   .empty-msg { color: var(--muted); font-size: 14px; margin: 0; }
-  video, iframe { width: 100%; border-radius: 8px; margin-top: 6px; background: #000; }
 
   .fab-bar {
     position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -71,10 +72,12 @@
   .fab {
     padding: 10px 14px; border-radius: 10px; border: none;
     font-size: 14px; font-weight: 600; cursor: pointer; background: transparent; color: var(--text);
+    text-decoration: none; display: inline-block;
   }
   .fab.primary { background: var(--accent); color: #fff; }
   .fab.success { background: var(--success); color: #fff; }
   .fab.link { background: transparent; color: var(--accent); }
+  .fab:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -132,14 +135,8 @@
   .save-status.saved { background: rgba(52,199,89,0.1); color: var(--success); border-color: rgba(52,199,89,0.3); }
   .save-status.error { background: rgba(255,59,48,0.1); color: var(--danger); border-color: rgba(255,59,48,0.3); }
 
-  @media print {
-    body * { visibility: hidden; }
-    .print-area, .print-area * { visibility: visible; }
-    .print-area { position: absolute; left: 0; top: 0; width: 100%; text-align: center; padding: 40px; }
-    .print-area h2 { font-size: 24px; margin-bottom: 8px; }
-    .print-area img, .print-area canvas { width: 300px !important; height: 300px !important; }
-  }
-  .print-area { display: none; }
+  /* Hidden canvas for QR PNG generation */
+  #qr-render-area { position: absolute; left: -9999px; top: -9999px; }
 </style>
 </head>
 <body>
@@ -148,14 +145,17 @@
 
 <div class="container">
   <div class="top-bar">
-    <div class="title-block" style="flex:1">
-      <input type="text" class="title-input" id="title-input" placeholder="🧼 Appliance Name" style="font-size:26px;font-weight:700;border:none;background:transparent;color:var(--text);width:100%;padding:2px 4px;margin-left:-4px;border-radius:6px">
+    <div class="title-block">
+      <input type="text" class="title-input" id="title-input" placeholder="🧼 Appliance Name">
       <input type="text" class="subtitle-input" id="subtitle-input" placeholder="Model · Location">
     </div>
     <div class="qr-block">
       <div id="qrcode"></div>
-      <button class="qr-print-btn" onclick="printQR()">🖨 Print QR</button>
-      <div class="hint" id="qr-hint" style="max-width:110px;text-align:center">Save first to enable</div>
+      <div class="qr-actions">
+        <button class="qr-action-btn" onclick="downloadQR()" id="qr-download-btn" disabled>💾 Download</button>
+        <button class="qr-action-btn" onclick="printQR()" id="qr-print-btn" disabled>🖨 Print</button>
+      </div>
+      <div class="hint" id="qr-hint" style="max-width:130px;text-align:center">Save first to enable</div>
     </div>
   </div>
 
@@ -185,7 +185,7 @@
 </div>
 
 <div class="fab-bar">
-  <a class="fab link" href=".">← Back to manuals</a>
+  <a class="fab link" href=".">← Back</a>
   <button class="fab success" onclick="saveManual()">💾 Save</button>
   <button class="fab" onclick="openPublishedPage()" id="open-btn" disabled>👁 Preview</button>
 </div>
@@ -194,12 +194,8 @@
   <div class="modal" id="modal-body"></div>
 </div>
 
-<div class="print-area" id="print-area">
-  <h2 id="print-title"></h2>
-  <p id="print-subtitle"></p>
-  <div id="print-qr"></div>
-  <p style="margin-top:20px;font-size:14px;color:#666">Scan to view manual &amp; videos</p>
-</div>
+<!-- Hidden render area for QR PNG generation -->
+<div id="qr-render-area"></div>
 
 <script>
 /* ============================================================
@@ -209,14 +205,9 @@ const BASE = window.location.pathname.replace(/\/editor\/?$/, '').replace(/\/$/,
 const urlParams = new URLSearchParams(window.location.search);
 let manualId = urlParams.get('id') || ('m_' + Date.now() + '_' + Math.random().toString(36).slice(2,8));
 let savedUrl = null;
+let savedSlug = null;
 
-const DATA = {
-  title: "",
-  subtitle: "",
-  videos: [],
-  trouble: [],
-  pdfs: [],
-};
+const DATA = { title: "", subtitle: "", videos: [], trouble: [], pdfs: [] };
 
 /* ============================================================
    API
@@ -252,7 +243,7 @@ async function uploadFile(file, onProgress) {
 }
 
 /* ============================================================
-   LOAD EXISTING MANUAL
+   LOAD EXISTING
    ============================================================ */
 async function loadManual() {
   if (!urlParams.get('id')) return;
@@ -260,16 +251,21 @@ async function loadManual() {
     const data = await api('/manuals/' + encodeURIComponent(manualId));
     Object.assign(DATA, data);
     savedUrl = data._local_url || null;
+    savedSlug = data._slug || null;
     document.getElementById('title-input').value = DATA.title || '';
     document.getElementById('subtitle-input').value = DATA.subtitle || '';
-    if (savedUrl) {
-      document.getElementById('open-btn').disabled = false;
-      document.getElementById('qr-hint').style.display = 'none';
-    }
+    if (savedUrl) enableQRButtons();
     render();
   } catch (e) {
     console.error('Failed to load manual', e);
   }
+}
+
+function enableQRButtons() {
+  document.getElementById('open-btn').disabled = false;
+  document.getElementById('qr-download-btn').disabled = false;
+  document.getElementById('qr-print-btn').disabled = false;
+  document.getElementById('qr-hint').style.display = 'none';
 }
 
 /* ============================================================
@@ -321,7 +317,7 @@ function removeItem(type, i) {
 }
 
 /* ============================================================
-   QR — points to the SAVED manual URL (/local/...)
+   QR — preview (small) and download (large PNG)
    ============================================================ */
 function renderQR() {
   const el = document.getElementById('qrcode');
@@ -330,21 +326,140 @@ function renderQR() {
     el.innerHTML = '<div style="width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#999;font-size:11px;text-align:center">Save first</div>';
     return;
   }
-  // Build absolute URL to the HA-served manual
-  const haBase = window.location.origin;
-  const fullUrl = haBase + savedUrl;
+  const fullUrl = window.location.origin + savedUrl;
   new QRCode(el, { text: fullUrl, width: 96, height: 96, correctLevel: QRCode.CorrectLevel.M });
 }
 
-function printQR() {
-  if (!savedUrl) { alert('Save the manual first so it has a stable URL.'); return; }
-  document.getElementById('print-title').textContent = DATA.title;
-  document.getElementById('print-subtitle').textContent = DATA.subtitle;
-  const pq = document.getElementById('print-qr');
-  pq.innerHTML = '';
+/**
+ * Render a high-res QR with the appliance name underneath into a canvas,
+ * then trigger download as PNG. The filename is the appliance slug.
+ */
+function downloadQR() {
+  if (!savedUrl) { alert('Save the manual first.'); return; }
+
   const fullUrl = window.location.origin + savedUrl;
-  new QRCode(pq, { text: fullUrl, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M });
-  setTimeout(() => window.print(), 200);
+  const title = DATA.title || 'Appliance';
+  const subtitle = DATA.subtitle || '';
+  const slug = savedSlug || slugify(title);
+
+  // 1. Render QR at 600px into a hidden div using qrcodejs (it produces a canvas or img)
+  const renderArea = document.getElementById('qr-render-area');
+  renderArea.innerHTML = '';
+  new QRCode(renderArea, {
+    text: fullUrl,
+    width: 600,
+    height: 600,
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+
+  // qrcodejs renders to canvas if supported, falls back to img. Wait a tick.
+  setTimeout(() => {
+    const qrCanvas = renderArea.querySelector('canvas');
+    const qrImg = renderArea.querySelector('img');
+
+    const finalCanvas = document.createElement('canvas');
+    const W = 700;
+    const padding = 50;
+    const titleSpace = 130;  // for title + subtitle below QR
+    finalCanvas.width = W;
+    finalCanvas.height = W + titleSpace;
+
+    const ctx = finalCanvas.getContext('2d');
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+    // Helper to draw QR + text once the QR pixels are ready
+    function drawComposite(qrSource) {
+      // Draw QR (centered horizontally, padded from top)
+      const qrSize = W - padding * 2;
+      ctx.drawImage(qrSource, padding, padding, qrSize, qrSize);
+
+      // Draw title
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 32px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText(truncate(title, 30), W / 2, W + 40);
+
+      // Draw subtitle
+      if (subtitle) {
+        ctx.fillStyle = '#555555';
+        ctx.font = '20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText(truncate(subtitle, 50), W / 2, W + 75);
+      }
+
+      // Hint text
+      ctx.fillStyle = '#888888';
+      ctx.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillText('Scan to view manual', W / 2, W + 110);
+
+      // Trigger download
+      finalCanvas.toBlob(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = slug + '.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        renderArea.innerHTML = '';
+      }, 'image/png');
+    }
+
+    if (qrCanvas) {
+      drawComposite(qrCanvas);
+    } else if (qrImg) {
+      // qrcodejs sometimes renders img — wait for it to load
+      if (qrImg.complete) drawComposite(qrImg);
+      else qrImg.onload = () => drawComposite(qrImg);
+    } else {
+      alert('Could not generate QR code.');
+    }
+  }, 100);
+}
+
+function truncate(s, max) {
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+function slugify(s) {
+  return (s || 'appliance').replace(/[^A-Za-z0-9\s-]/g, '').trim().toLowerCase().replace(/\s+/g, '-').slice(0, 80) || 'appliance';
+}
+
+/* Print: fall back to opening PNG in new tab and printing from there */
+function printQR() {
+  if (!savedUrl) { alert('Save the manual first.'); return; }
+  const fullUrl = window.location.origin + savedUrl;
+  const title = DATA.title || 'Appliance';
+  const subtitle = DATA.subtitle || '';
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — please allow pop-ups to print.'); return; }
+
+  w.document.write(`
+    <html><head><title>${escapeHtml(title)} — QR</title>
+    <style>
+      body { font-family: -apple-system, sans-serif; text-align: center; padding: 40px; }
+      h1 { font-size: 28px; margin-bottom: 4px; }
+      p { color: #666; margin: 4px 0; }
+      #qr { display: inline-block; margin: 20px auto; }
+      .hint { color: #888; font-size: 14px; margin-top: 8px; }
+      @media print { body { padding: 20px; } }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"><\/script>
+    </head><body>
+    <h1>${escapeHtml(title)}</h1>
+    <p>${escapeHtml(subtitle)}</p>
+    <div id="qr"></div>
+    <p class="hint">Scan to view manual</p>
+    <script>
+      new QRCode(document.getElementById('qr'), { text: ${JSON.stringify(fullUrl)}, width: 400, height: 400 });
+      setTimeout(() => window.print(), 400);
+    <\/script>
+    </body></html>
+  `);
+  w.document.close();
 }
 
 /* ============================================================
@@ -361,11 +476,10 @@ async function saveManual() {
       body: JSON.stringify(DATA),
     });
     savedUrl = res.local_url;
-    document.getElementById('open-btn').disabled = false;
-    document.getElementById('qr-hint').style.display = 'none';
+    savedSlug = res.slug;
+    enableQRButtons();
     renderQR();
     setStatus('saved');
-    // Update URL without navigating, so refresh keeps editing same manual
     window.history.replaceState(null, '', '?id=' + encodeURIComponent(manualId));
   } catch (e) {
     setStatus('error', e.message);
