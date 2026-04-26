@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1
+
+- 📐 QR code PNG is now sized for **30mm × 30mm physical print** (300 DPI) with appropriately scaled title/subtitle text
+- The PNG includes DPI metadata so it prints at the intended size by default
+
 ## 1.1.0
 
 - 💾 **QR codes now download as PNG** named after the appliance (e.g. `dishwasher.png`), with the appliance name and subtitle rendered below the code
