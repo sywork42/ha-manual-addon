@@ -2,10 +2,12 @@
 
 export MAX_UPLOAD_MB=$(bashio::config 'max_upload_mb')
 export SUBFOLDER=$(bashio::config 'subfolder')
+export OBFUSCATE_URLS=$(bashio::config 'obfuscate_urls')
 
 bashio::log.info "Starting Manual Uploader..."
 bashio::log.info "Max upload size: ${MAX_UPLOAD_MB} MB"
 bashio::log.info "Subfolder: ${SUBFOLDER}"
+bashio::log.info "URL obfuscation: ${OBFUSCATE_URLS}"
 
 cd /app
 exec python3 server.py
